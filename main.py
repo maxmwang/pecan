@@ -1,5 +1,7 @@
+import os
 import discord
 import docker
+from dotenv import load_dotenv
 
 class Cean(discord.Client):
     async def on_ready(self):
@@ -27,8 +29,13 @@ class Cean(discord.Client):
             await message.channel.send('pong')
 
 if __name__ == '__main__':
+    load_dotenv()
+
     intents = discord.Intents.default()
     intents.message_content = True
     client = Cean(intents=intents)
-    client.run('~')
+
+    print(os.getenv('BOT_TOKEN'))
+
+    client.run(os.getenv('BOT_TOKEN'))
 
