@@ -6,12 +6,14 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+const commandPrefix = ">"
+
 func Entry(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.Author.ID == s.State.User.ID {
 		return
 	}
 
-	if !strings.HasPrefix(m.Content, ">") {
+	if !strings.HasPrefix(m.Content, commandPrefix) {
 		return
 	}
 
