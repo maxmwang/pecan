@@ -18,7 +18,7 @@ func Entry(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	if strings.HasPrefix(m.Content, commandPrefix+"exec") {
-		c := strings.TrimPrefix(m.Content, commandPrefix+"exec")
+		c := strings.TrimPrefix(m.Content, commandPrefix+"exec\n")
 		exec(s, m, c)
 	}
 

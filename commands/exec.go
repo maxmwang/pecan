@@ -10,6 +10,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/sirupsen/logrus"
 )
 
 var languageToImage = map[string]string{
@@ -25,17 +26,28 @@ var imageToCmdPrefix = map[string][]string{
 }
 
 func exec(s *discordgo.Session, m *discordgo.MessageCreate, c string) {
-	// TODO: validate and sanitize input
+	if !strings.HasPrefix(c, "```") || !strings.HasSuffix(c, "```") {
+		_, _ = s.ChannelMessageSend(m.ChannelID, "Invalid syntax. Use ``````<lang>\n<code>``````")
+		return
+	}
 
-	raw0 := strings.Split(m.Content, "```")[1]
+	raw0 := strings.TrimPrefix(c, "```")
+	raw0 = strings.TrimSuffix(raw0, "```")
 	raw1 := strings.SplitN(raw0, "\n", 2)
 	lang := raw1[0]
 	code := raw1[1]
-
-	// TODO: validate and sanitize input
-
-	image := languageToImage[lang]
+	image, ok := languageToImage[lang]
+	if !ok {
+		_, _ = s.ChannelMessageSend(m.ChannelID, "Invalid or unsupported language: "+lang)
+		return
+	}
 	cmdPrefix := imageToCmdPrefix[image]
+
+	logrus.WithFields(logrus.Fields{
+		"time":   m.Timestamp,
+		"author": m.Author.ID,
+		"lang":   lang,
+	}).Info("exec")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -46,11 +58,7 @@ func exec(s *discordgo.Session, m *discordgo.MessageCreate, c string) {
 		return
 	}
 	defer func() {
-		err = cli.Close()
-		if err != nil {
-			reportErr(s, m, err)
-			return
-		}
+		_ = cli.Close()
 	}()
 
 	reader, err := cli.ImagePull(ctx, image, types.ImagePullOptions{})
@@ -59,11 +67,7 @@ func exec(s *discordgo.Session, m *discordgo.MessageCreate, c string) {
 		return
 	}
 	defer func() {
-		err = reader.Close()
-		if err != nil {
-			reportErr(s, m, err)
-			return
-		}
+		_ = reader.Close()
 	}()
 
 	resp, err := cli.ContainerCreate(ctx, &container.Config{
@@ -97,10 +101,14 @@ func exec(s *discordgo.Session, m *discordgo.MessageCreate, c string) {
 		return
 	}
 
-	err = cli.ContainerRemove(ctx, resp.ID, types.ContainerRemoveOptions{})
+	_ = cli.ContainerRemove(ctx, resp.ID, types.ContainerRemoveOptions{})
 	if err != nil {
-		reportErr(s, m, err)
-		return
+		logrus.WithFields(logrus.Fields{
+			"time":      m.Timestamp,
+			"author":    m.Author.ID,
+			"lang":      lang,
+			"container": resp.ID,
+		}).Error("failed to remove container")
 	}
 
 	buf := new(strings.Builder)
@@ -109,5 +117,5 @@ func exec(s *discordgo.Session, m *discordgo.MessageCreate, c string) {
 		reportErr(s, m, err)
 		return
 	}
-	_, err = s.ChannelMessageSend(m.ChannelID, "```"+buf.String()+"```")
+	_, _ = s.ChannelMessageSend(m.ChannelID, "```"+buf.String()+"```")
 }
